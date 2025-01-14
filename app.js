@@ -3,64 +3,54 @@ require('dotenv').config();
 const express = require('express');
 const expressLayouts = require('express-ejs-layouts');
 const connectDB = require('./server/config/db');
-const session = require('express-session')
-const flash=require('connect-flash')
+const session = require('express-session');
+const flash = require('connect-flash');
 const methodOverride = require('method-override');
-
+const { graphqlHTTP } = require('express-graphql');
+const schema = require('./server/graphql/schema');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 connectDB();
 
-//Middleware
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method'));
 
-//Express Session
+// Express Session
 app.use(session({
-    secret:'secret',
+    secret: 'secret',
     resave: false,
     saveUninitialized: true,
     cookie: {
-        maxAge: 10000*60*60*24*7 // 1 week
+        maxAge: 10000 * 60 * 60 * 24 * 7 // 1 week
     }
 }));
 
-// setup flash
-app.use(
-  flash({ sessionKeyName: 'express-flash-message'}));
- 
- // Static Fields 
+// Flash Messages
+app.use(flash({ sessionKeyName: 'express-flash-message' }));
+
+// Static Files
 app.use(express.static('public'));
 
-//Express Session
-app.use(session({
-   session:'secret',
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-        maxAge: 10000*60*60*24*7 // 1 week
-    }
-
-})
-);
-
-// setup flash
-app.use(
-  flash({ sessionKeyName: 'express-flash-message'}));
-
-// Templating Engine   
+// Templating Engine
 app.use(expressLayouts);
 app.set('layout', './layouts/main');
 app.set('view engine', 'ejs');
 
-// Routes
+// REST API Routes
 app.use('/', require('./server/routes/customer'));
 
-//Handlle 404
-app.get('*', (req, res) => {  
+// GraphQL Endpoint
+app.use('/graphql', graphqlHTTP({
+    schema,
+    graphiql: true 
+}));
+
+// Handle 404
+app.get('*', (req, res) => {
     res.render('404');
 });
 

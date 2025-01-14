@@ -1,200 +1,239 @@
- const Customer = require('../models/Customer');
-const mongoose = require('mongoose');
+const { request } = require('graphql-request');
+const graphqlEndpoint = 'http://localhost:5000/graphql'; 
 
+// Homepage
 exports.homepage = async (req, res) => {
-
     const messages = req.flash('info');
     const locals = {
         title: 'Node Js',
         description: 'User Management System',
-    }
- 
+    };
+
     let perPage = 12;
     let page = req.query.page || 1;
 
+    const query = `
+        query GetCustomers($page: Int, $perPage: Int) {
+            customers(page: $page, perPage: $perPage) {
+                id
+                firstName
+                lastName
+                tel
+                email
+                details
+                createdAt
+            }
+            countCustomers
+        }
+    `;
+
+    const variables = { page: parseInt(page), perPage };
+
     try {
-      const customers = await Customer.aggregate([ { $sort: { createdAt: -1 } } ])
-        .skip(perPage * page - perPage)
-        .limit(perPage)
-        .exec(); 
-      const count = await Customer.count();
+        const { customers, countCustomers } = await request(graphqlEndpoint, query, variables);
 
-      res.render('index', {
-        locals,
-        customers,
-        current: page,
-        pages: Math.ceil(count / perPage),
-        messages
-      });
-
+        res.render('index', {
+            locals,
+            customers,
+            current: page,
+            pages: Math.ceil(countCustomers / perPage),
+            messages,
+        });
     } catch (error) {
-      console.log(error);
+        console.log(error);
     }
-}
+};
 
-
-
+// Add Customer Form
 exports.addCustomer = (req, res) => {
     const locals = {
         title: 'Add New Customer',
         description: 'User Management System',
-    }
+    };
+    res.render('customer/add', locals);
+};
 
-    res.render('customer/add',locals);
-}
+// Post New Customer
+exports.postCustomer = async (req, res) => {
+    const mutation = `
+        mutation AddCustomer($input: CustomerInput!) {
+            addCustomer(input: $input) {
+                id
+            }
+        }
+    `;
 
-exports.postCustomer  = async (req, res) => {
-    console.log(req.body);
-
-    const newCustomer = new Customer({
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        tel: req.body.tel,
-        email: req.body.email,
-        details: req.body.details,
-    });
+    const variables = {
+        input: {
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            tel: req.body.tel,
+            email: req.body.email,
+            details: req.body.details,
+        },
+    };
 
     try {
-        await Customer.create(newCustomer);
+        await request(graphqlEndpoint, mutation, variables);
         req.flash("info", "New customer has been added.");
         res.redirect('/');
     } catch (err) {
         console.log(err);
     }
-    
-}
+};
 
+// View Customer
 exports.view = async (req, res) => {
+    const query = `
+        query GetCustomer($id: ID!) {
+            customer(id: $id) {
+                id
+                firstName
+                lastName
+                tel
+                email
+                details
+                createdAt
+            }
+        }
+    `;
 
-  try {
-    const customer = await Customer.findOne({ _id: req.params.id })
-
-    const locals = {
-      title: "View Customer Data",
-      description: "Free NodeJs User Management System",
-    };
-
-    res.render('customer/view', {
-      locals,
-      customer
-    })
-
-  } catch (error) {
-    console.log(error);
-  }
-
-}
-
-
-exports.view = async (req, res) => {
-
-  try {
-    const customer = await Customer.findOne({ _id: req.params.id })
-
-    const locals = {
-      title: "View Customer Data",
-      description: "Free NodeJs User Management System",
-    };
-
-    res.render('customer/view', {
-      locals,
-      customer
-    })
-
-  } catch (error) {
-    console.log(error);
-  }
-
-}
-
-exports.edit = async (req, res) => {
-
-  try {
-    const customer = await Customer.findOne({ _id: req.params.id })
-
-    const locals = {
-      title: "Edit Customer Data",
-      description: "Free NodeJs User Management System",
-    };
-
-    res.render('customer/edit', {
-      locals,
-      customer
-    })
-
-  } catch (error) {
-    console.log(error);
-  }
-
-}
-
-exports.editPost = async (req, res) => {
+    const variables = { id: req.params.id };
 
     try {
-    await Customer.findByIdAndUpdate(req.params.id,{
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      tel: req.body.tel,
-      email: req.body.email,
-      details: req.body.details,
-      updatedAt: Date.now()
-    });
-    await res.redirect(`/edit/${req.params.id}`);
-    
-    console.log('redirected');
-  } catch (error) {
-    console.log(error);
-  }
+        const { customer } = await request(graphqlEndpoint, query, variables);
 
-}
+        const locals = {
+            title: 'View Customer Data',
+            description: 'User Management System',
+        };
 
-  exports.deleteCustomer = async (req, res) => {
-  try {
-    await Customer.deleteOne({ _id: req.params.id });
-    res.redirect("/")
-  } catch (error) {
-    console.log(error);
-  }
-}
+        res.render('customer/view', { locals, customer });
+    } catch (error) {
+        console.log(error);
+    }
+};
 
+// Edit Customer Form
+exports.edit = async (req, res) => {
+    const query = `
+        query GetCustomer($id: ID!) {
+            customer(id: $id) {
+                id
+                firstName
+                lastName
+                tel
+                email
+                details
+                createdAt
+            }
+        }
+    `;
+
+    const variables = { id: req.params.id };
+
+    try {
+        const { customer } = await request(graphqlEndpoint, query, variables);
+
+        const locals = {
+            title: 'Edit Customer Data',
+            description: 'User Management System',
+        };
+
+        res.render('customer/edit', { locals, customer });
+    } catch (error) {
+        console.log(error);
+    }
+};
+
+// Update Customer
+exports.editPost = async (req, res) => {
+    const mutation = `
+        mutation UpdateCustomer($id: ID!, $input: CustomerInput!) {
+            updateCustomer(id: $id, input: $input) {
+                id
+            }
+        }
+    `;
+
+    const variables = {
+        id: req.params.id,
+        input: {
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            tel: req.body.tel,
+            email: req.body.email,
+            details: req.body.details,
+        },
+    };
+
+    try {
+        await request(graphqlEndpoint, mutation, variables);
+        res.redirect(`/edit/${req.params.id}`);
+    } catch (error) {
+        console.log(error);
+    }
+};
+
+// Delete Customer
+exports.deleteCustomer = async (req, res) => {
+    const mutation = `
+        mutation DeleteCustomer($id: ID!) {
+            deleteCustomer(id: $id)
+        }
+    `;
+
+    const variables = { id: req.params.id };
+
+    try {
+        await request(graphqlEndpoint, mutation, variables);
+        res.redirect('/');
+    } catch (error) {
+        console.log(error);
+    }
+};
+
+// Search Customers
 exports.searchCustomers = async (req, res) => {
+    const locals = {
+        title: 'Search Customer Data',
+        description: 'User Management System',
+    };
 
-  const locals = {
-    title: "Search Customer Data",
-    description: "Free NodeJs User Management System",
-  };
+    const query = `
+        query SearchCustomers($searchTerm: String!) {
+            searchCustomers(searchTerm: $searchTerm) {
+                id
+                firstName
+                lastName
+                tel
+                email
+                details
+            }
+        }
+    `;
 
-  try {
-    let searchTerm = req.body.searchTerm;
-    const searchNoSpecialChar = searchTerm.replace(/[^a-zA-Z0-9 ]/g, "");
+    const variables = { searchTerm: req.body.searchTerm };
 
-    const customers = await Customer.find({
-      $or: [
-        { firstName: { $regex: new RegExp(searchNoSpecialChar, "i") }},
-        { lastName: { $regex: new RegExp(searchNoSpecialChar, "i") }},
-      ]
-    });
+    try {
+        const { searchCustomers } = await request(graphqlEndpoint, query, variables);
 
-    res.render("search", {
-      customers,
-      locals
-    })
-    
-  } catch (error) {
-    console.log(error);
-  }
+        res.render('search', { customers: searchCustomers, locals });
+    } catch (error) {
+        console.log(error);
+    }
+};
 
-}
-
+// About Page
 exports.about = async (req, res) => {
     const locals = {
-      title: 'About',
-      description: 'Free NodeJs User Management System'
-    }
+        title: 'About',
+        description: 'User Management System',
+    };
 
     try {
-      res.render('about', locals );
+        res.render('about', locals);
     } catch (error) {
-      console.log(error);
+        console.log(error);
     }
-}
+};
